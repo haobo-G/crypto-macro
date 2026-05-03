@@ -31,11 +31,13 @@ TICKERS = {
     "BTC": "BTC-USD", "ETH": "ETH-USD",
     "SPX": "^GSPC",   "NDX": "^IXIC",
     "VIX": "^VIX",    "TNX": "^TNX",
+    "GLD": "GC=F",    "OIL": "CL=F",
 }
 LABELS = {
     "BTC": "Bitcoin", "ETH": "Ethereum",
     "SPX": "S&P 500", "NDX": "Nasdaq",
     "VIX": "VIX",     "TNX": "10Y UST",
+    "GLD": "Gold",    "OIL": "WTI Oil",
 }
 
 CORR_BANDS = [
@@ -114,9 +116,9 @@ def make_heatmap(corr, title):
 
 def make_bar_chart(returns, days=30):
     recent = returns.tail(days)
-    fig, axes = plt.subplots(3, 2, figsize=(12, 9), sharex=True)
+    fig, axes = plt.subplots(4, 2, figsize=(12, 12), sharex=True)
     axes = axes.flatten()
-    for i, col in enumerate(["BTC", "ETH", "SPX", "NDX", "VIX", "TNX"]):
+    for i, col in enumerate(["BTC", "ETH", "SPX", "NDX", "VIX", "TNX", "GLD", "OIL"]):
         if col not in recent.columns:
             axes[i].set_visible(False)
             continue
@@ -157,7 +159,7 @@ def build_corr_rows(corr, top=6):
 
 def build_snapshot_rows(last, price):
     rows = ""
-    for col in ["BTC", "ETH", "SPX", "NDX", "VIX", "TNX"]:
+    for col in ["BTC", "ETH", "SPX", "NDX", "VIX", "TNX", "GLD", "OIL"]:
         if col not in last.index:
             continue
         val = last[col]
@@ -166,7 +168,7 @@ def build_snapshot_rows(last, price):
         color = "#27ae60" if val > 0 else ("#e74c3c" if val < 0 else "#888")
         px = price[col].iloc[-1] if col in price.columns else None
         if px and col in ("BTC", "ETH"):
-            px_str = "$%s" % "{:,.0f}".format(px)
+            px_str = "$%s" % "{:,.0f}".format(int(px))
         elif px:
             px_str = "%.2f" % px
         else:
