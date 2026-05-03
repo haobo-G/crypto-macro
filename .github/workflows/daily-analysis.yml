@@ -1,0 +1,53 @@
+name: 每日加密宏观相关性分析
+
+on:
+  # 每天北京时间 09:00 自动运行（UTC 01:00）
+  schedule:
+    - cron: "0 1 * * *"
+
+  # 手机/浏览器上手动点击触发
+  workflow_dispatch:
+    inputs:
+      days:
+        description: "回溯天数（默认90）"
+        required: false
+        default: "90"
+
+permissions:
+  contents: write
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 设置 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: 安装中文字体
+        run: |
+          sudo apt-get install -y fonts-noto-cjk
+          fc-cache -fv
+
+      - name: 安装依赖
+        run: pip install -r requirements.txt
+
+      - name: 运行分析（生成 index.html）
+        run: python scripts/analyze_web.py
+        env:
+          PYTHONIOENCODING: utf-8
+
+      - name: 发布到 GitHub Pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: .          # index.html 在根目录
+          publish_branch: gh-pages
+          commit_message: "自动更新：${{ github.run_id }}"
+          keep_files: false
