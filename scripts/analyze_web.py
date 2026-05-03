@@ -1,6 +1,8 @@
+# -*- coding: utf-8 -*-
 """
-加密货币 × 宏观经济相关性分�?�?Web 版本
-输出: 单文�?index.html（图�?base64 内嵌，手机可直接浏览�?"""
+???? x ????????? ? Web ??
+??: ??? index.html??? base64 ???????????
+"""
 
 import base64
 import io
@@ -16,15 +18,15 @@ import seaborn as sns
 import pandas as pd
 import yfinance as yf
 
-# 中文字体支持
 def _setup_font():
-    candidates = ["Microsoft YaHei", "SimHei", "Noto Sans CJK SC",
-                  "WenQuanYi Micro Hei", "PingFang SC"]
+    candidates = ["Noto Sans CJK SC", "WenQuanYi Micro Hei",
+                  "Microsoft YaHei", "SimHei", "PingFang SC"]
     available = {f.name for f in fm.fontManager.ttflist}
     for font in candidates:
         if font in available:
             plt.rcParams["font.family"] = font
             return
+
 _setup_font()
 plt.rcParams["axes.unicode_minus"] = False
 
@@ -34,21 +36,39 @@ TICKERS = {
     "VIX": "^VIX",    "TNX": "^TNX",
 }
 LABELS = {
-    "BTC": "比特�?, "ETH": "以太�?,
-    "SPX": "标普500", "NDX": "纳斯达克",
-    "VIX": "VIX恐慌", "TNX": "10Y美�?,
+    "BTC": "Bitcoin", "ETH": "Ethereum",
+    "SPX": "S&P 500", "NDX": "Nasdaq",
+    "VIX": "VIX",     "TNX": "10Y UST",
+}
+LABELS_ZH = {
+    "BTC": "Bitcoin",  "ETH": "Ethereum",
+    "SPX": "S&P 500",  "NDX": "Nasdaq",
+    "VIX": "VIX",      "TNX": "10Y Bond",
 }
 CORR_DESC = [
-    (0.7, 1.01, "强正相关"), (0.4, 0.7, "中等正相�?),
-    (0.1, 0.4, "弱正相关"),  (-0.1, 0.1, "几乎无相�?),
-    (-0.4, -0.1, "弱负相关"), (-0.7, -0.4, "中等负相�?),
-    (-1.01, -0.7, "强负相关"),
+    (0.7,  1.01, "Strong +"),
+    (0.4,  0.7,  "Moderate +"),
+    (0.1,  0.4,  "Weak +"),
+    (-0.1, 0.1,  "Neutral"),
+    (-0.4, -0.1, "Weak -"),
+    (-0.7, -0.4, "Moderate -"),
+    (-1.01,-0.7, "Strong -"),
 ]
+
+CORR_DESC_ZH = {
+    "Strong +":   "????",
+    "Moderate +": "?????",
+    "Weak +":     "????",
+    "Neutral":    "?????",
+    "Weak -":     "????",
+    "Moderate -": "?????",
+    "Strong -":   "????",
+}
 
 def describe_corr(v):
     for lo, hi, label in CORR_DESC:
         if lo <= v < hi:
-            return label
+            return CORR_DESC_ZH.get(label, label)
     return ""
 
 def fetch_data(days=100):
@@ -58,7 +78,8 @@ def fetch_data(days=100):
     for name, ticker in TICKERS.items():
         for _ in range(3):
             try:
-                df = yf.download(ticker, start=start.strftime("%Y-%m-%d"),
+                df = yf.download(ticker,
+                                 start=start.strftime("%Y-%m-%d"),
                                  end=end.strftime("%Y-%m-%d"),
                                  progress=False, auto_adjust=True)
                 if not df.empty:
@@ -66,7 +87,9 @@ def fetch_data(days=100):
                     break
             except Exception:
                 pass
-    return pd.DataFrame(frames).pipe(lambda d: d.set_index(pd.to_datetime(d.index)))
+    price = pd.DataFrame(frames)
+    price.index = pd.to_datetime(price.index)
+    return price
 
 def compute_returns(price):
     rets = pd.DataFrame(index=price.index)
@@ -107,12 +130,12 @@ def make_bar_chart(returns, days=30):
         colors = ["#e74c3c" if v < 0 else "#27ae60" for v in recent[col]]
         ax.bar(recent.index, recent[col], color=colors, width=0.7)
         ax.axhline(0, color="black", linewidth=0.7)
-        unit = "变化�?pt)" if col in ("VIX", "TNX") else "涨跌�?%)"
+        unit = "chg(pt)" if col in ("VIX", "TNX") else "ret(%)"
         ax.set_title(f"{LABELS.get(col, col)}  {unit}", fontsize=10)
         ax.xaxis.set_major_formatter(mdates.DateFormatter("%m/%d"))
         ax.xaxis.set_major_locator(mdates.WeekdayLocator(interval=2))
         plt.setp(ax.xaxis.get_majorticklabels(), rotation=45, ha="right")
-    fig.suptitle(f"每日涨跌对比（最�?{days} 个交易日�?, fontsize=13)
+    fig.suptitle(f"Daily Returns ? Last {days} Trading Days", fontsize=13)
     plt.tight_layout()
     return fig_to_b64(fig)
 
@@ -127,142 +150,150 @@ def corr_rows(corr, top=6):
     for a, b, v in pairs[:top]:
         color = "#27ae60" if v > 0 else "#e74c3c"
         desc = describe_corr(v)
-        rows += f"""
-        <tr>
-          <td>{LABELS.get(a,a)} × {LABELS.get(b,b)}</td>
-          <td style="color:{color};font-weight:700">{v:+.2f}</td>
-          <td>{desc}</td>
-        </tr>"""
+        rows += (
+            f"<tr>"
+            f"<td>{LABELS.get(a,a)} x {LABELS.get(b,b)}</td>"
+            f'<td style="color:{color};font-weight:700">{v:+.2f}</td>'
+            f"<td>{desc}</td>"
+            f"</tr>"
+        )
     return rows
 
-def build_html(returns, corr30, corr90, price):
-    now = datetime.now().strftime("%Y-%m-%d %H:%M")
-    last_date = returns.index[-1].strftime("%Y-%m-%d")
-    last = returns.iloc[-1]
-
-    img_heatmap30 = make_heatmap(corr30, "相关系数热力图（�?0个交易日�?)
-    img_heatmap90 = make_heatmap(corr90, "相关系数热力图（�?0个交易日�?)
-    img_bars = make_bar_chart(returns, min(30, len(returns)))
-
-    # 今日快照�?    snapshot_rows = ""
+def snapshot_rows_html(last, price):
+    rows = ""
     for col in ["BTC", "ETH", "SPX", "NDX", "VIX", "TNX"]:
         if col not in last.index:
             continue
         val = last[col]
         unit = "pt" if col in ("VIX", "TNX") else "%"
-        arrow = "�? if val > 0 else ("�? if val < 0 else "�?)
+        arrow = "&#9650;" if val > 0 else ("&#9660;" if val < 0 else "&mdash;")
         color = "#27ae60" if val > 0 else ("#e74c3c" if val < 0 else "#888")
-        # 当前价格
         px = price[col].iloc[-1] if col in price.columns else None
-        px_str = f"${px:,.2f}" if px and col in ("BTC","ETH") else (f"{px:.2f}" if px else "")
-        snapshot_rows += f"""
-        <tr>
-          <td>{LABELS.get(col,col)}</td>
-          <td>{px_str}</td>
-          <td style="color:{color};font-weight:700">{arrow} {val:+.2f}{unit}</td>
-        </tr>"""
+        if px and col in ("BTC", "ETH"):
+            px_str = f"${px:,.0f}"
+        elif px:
+            px_str = f"{px:.2f}"
+        else:
+            px_str = ""
+        rows += (
+            f"<tr>"
+            f"<td>{LABELS.get(col,col)}</td>"
+            f"<td>{px_str}</td>"
+            f'<td style="color:{color};font-weight:700">{arrow} {val:+.2f}{unit}</td>'
+            f"</tr>"
+        )
+    return rows
 
-    rows30 = corr_rows(corr30)
-    rows90 = corr_rows(corr90)
+def build_html(returns, corr30, corr90, price):
+    now = datetime.now().strftime("%Y-%m-%d %H:%M UTC")
+    last_date = returns.index[-1].strftime("%Y-%m-%d")
+    last = returns.iloc[-1]
+
+    img30  = make_heatmap(corr30, "Correlation Heatmap ? 30 Trading Days")
+    img90  = make_heatmap(corr90, "Correlation Heatmap ? 90 Trading Days")
+    imgbar = make_bar_chart(returns, min(30, len(returns)))
+
+    snap  = snapshot_rows_html(last, price)
+    r30   = corr_rows(corr30)
+    r90   = corr_rows(corr90)
 
     return f"""<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>加密货币 × 宏观相关�?/title>
+<title>Crypto x Macro Correlation</title>
 <style>
-  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
-  body {{ font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
-         background: #0f1117; color: #e0e0e0; padding: 16px; }}
-  h1 {{ font-size: 1.3rem; color: #f0f0f0; margin-bottom: 4px; }}
-  .subtitle {{ color: #888; font-size: 0.8rem; margin-bottom: 20px; }}
-  .card {{ background: #1a1d27; border-radius: 12px; padding: 16px;
-           margin-bottom: 16px; border: 1px solid #2a2d3a; }}
-  h2 {{ font-size: 1rem; color: #aaa; margin-bottom: 12px;
-        border-left: 3px solid #6c63ff; padding-left: 8px; }}
-  table {{ width: 100%; border-collapse: collapse; font-size: 0.88rem; }}
-  th {{ color: #888; font-weight: 500; padding: 6px 4px;
-        border-bottom: 1px solid #2a2d3a; text-align: left; }}
-  td {{ padding: 7px 4px; border-bottom: 1px solid #1f2230; }}
-  img {{ width: 100%; border-radius: 8px; margin-top: 8px; }}
-  .refresh-btn {{ display: block; width: 100%; padding: 12px;
-                  background: #6c63ff; color: white; border: none;
-                  border-radius: 10px; font-size: 1rem; cursor: pointer;
-                  margin-bottom: 16px; text-align: center; text-decoration: none; }}
-  .warning {{ background: #2a1f1a; border: 1px solid #8b4513;
-              border-radius: 8px; padding: 12px; font-size: 0.8rem; color: #cd853f; }}
-  .warning li {{ margin-left: 16px; margin-top: 4px; }}
+  *{{box-sizing:border-box;margin:0;padding:0}}
+  body{{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
+        background:#0f1117;color:#e0e0e0;padding:16px}}
+  h1{{font-size:1.3rem;color:#f0f0f0;margin-bottom:4px}}
+  .sub{{color:#888;font-size:0.78rem;margin-bottom:18px}}
+  .card{{background:#1a1d27;border-radius:12px;padding:16px;
+         margin-bottom:14px;border:1px solid #2a2d3a}}
+  h2{{font-size:0.95rem;color:#aaa;margin-bottom:10px;
+      border-left:3px solid #6c63ff;padding-left:8px}}
+  table{{width:100%;border-collapse:collapse;font-size:0.85rem}}
+  th{{color:#888;font-weight:500;padding:5px 4px;
+      border-bottom:1px solid #2a2d3a;text-align:left}}
+  td{{padding:6px 4px;border-bottom:1px solid #1f2230}}
+  img{{width:100%;border-radius:8px;margin-top:8px}}
+  .btn{{display:block;width:100%;padding:12px;background:#6c63ff;
+        color:#fff;border:none;border-radius:10px;font-size:0.95rem;
+        cursor:pointer;margin-bottom:14px;text-align:center;
+        text-decoration:none}}
+  .note{{background:#2a1f1a;border:1px solid #8b4513;
+         border-radius:8px;padding:12px;font-size:0.78rem;color:#cd853f}}
+  .note li{{margin-left:16px;margin-top:4px}}
 </style>
 </head>
 <body>
+<h1>Crypto x Macro Correlation</h1>
+<p class="sub">Updated: {now} &nbsp;|&nbsp; Latest data: {last_date}</p>
 
-<h1>加密货币 × 宏观经济</h1>
-<p class="subtitle">数据更新：{now}　最新交易日：{last_date}</p>
-
-<a class="refresh-btn" href="https://github.com/haobo-G/crypto-macro/actions" target="_blank">
-  手动触发刷新 �?</a>
+<a class="btn" href="https://github.com/haobo-G/crypto-macro/actions" target="_blank">
+  Refresh manually (GitHub Actions) &rarr;
+</a>
 
 <div class="card">
-  <h2>今日快照</h2>
+  <h2>Latest Snapshot</h2>
   <table>
-    <tr><th>资产</th><th>价格</th><th>涨跌</th></tr>
-    {snapshot_rows}
+    <tr><th>Asset</th><th>Price</th><th>Change</th></tr>
+    {snap}
   </table>
 </div>
 
 <div class="card">
-  <h2>�?0天相关系�?TOP 6</h2>
+  <h2>30-Day Correlation ? Top 6 Pairs</h2>
   <table>
-    <tr><th>资产�?/th><th>系数</th><th>强度</th></tr>
-    {rows30}
+    <tr><th>Pair</th><th>r</th><th>Strength</th></tr>
+    {r30}
   </table>
-  <img src="{img_heatmap30}" alt="热力�?0�?>
+  <img src="{img30}" alt="heatmap 30d">
 </div>
 
 <div class="card">
-  <h2>�?0天相关系�?TOP 6</h2>
+  <h2>90-Day Correlation ? Top 6 Pairs</h2>
   <table>
-    <tr><th>资产�?/th><th>系数</th><th>强度</th></tr>
-    {rows90}
+    <tr><th>Pair</th><th>r</th><th>Strength</th></tr>
+    {r90}
   </table>
-  <img src="{img_heatmap90}" alt="热力�?0�?>
+  <img src="{img90}" alt="heatmap 90d">
 </div>
 
 <div class="card">
-  <h2>每日涨跌对比</h2>
-  <img src="{img_bars}" alt="每日涨跌">
+  <h2>Daily Returns Comparison</h2>
+  <img src="{imgbar}" alt="daily returns">
 </div>
 
-<div class="warning">
-  <strong>风险提示</strong>
+<div class="note">
+  <strong>Risk Notice</strong>
   <ul>
-    <li>相关性描述历史统计关系，不代表因�?/li>
-    <li>加密市场与传统市场存�?-2天时滞效�?/li>
-    <li>数据来源：Yahoo Finance，存在延迟和缺失的可能�?/li>
+    <li>Correlation describes historical statistics, not causation</li>
+    <li>Crypto vs traditional markets may have 1-2 day lag effects</li>
+    <li>Data source: Yahoo Finance ? delays and gaps possible</li>
   </ul>
 </div>
-
 </body>
 </html>"""
 
 def main():
-    print("正在获取数据...")
+    print("Fetching data...")
     price = fetch_data(100)
     returns = compute_returns(price)
     if returns.empty or len(returns) < 5:
-        print("数据不足，退�?, file=sys.stderr)
+        print("Insufficient data.", file=sys.stderr)
         sys.exit(1)
-    print(f"有效交易日：{len(returns)}，最新：{returns.index[-1].date()}")
+    print(f"Valid trading days: {len(returns)}, latest: {returns.index[-1].date()}")
 
     corr30 = returns.tail(30).corr()
     corr90 = returns.tail(90).corr()
 
-    print("生成 HTML 报告...")
+    print("Building HTML report...")
     html = build_html(returns, corr30, corr90, price)
     with open("index.html", "w", encoding="utf-8") as f:
         f.write(html)
-    print("完成 �?index.html")
+    print("Done -> index.html")
 
 if __name__ == "__main__":
     main()
