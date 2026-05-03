@@ -136,7 +136,7 @@ def make_bar_chart(returns, days=30):
     return fig_to_b64(fig)
 
 
-def build_corr_rows(corr, top=6):
+def build_corr_rows(corr, top=8):
     pairs = []
     cols = list(corr.columns)
     for i in range(len(cols)):
@@ -237,11 +237,11 @@ def build_html(returns, corr30, corr90, price):
         "<table><tr><th>Asset</th><th>Price</th><th>Change</th></tr>"
         + snap +
         "</table></div>\n"
-        "<div class=\"card\"><h2>30-Day Correlation - Top 6 Pairs</h2>"
+        "<div class=\"card\"><h2>30-Day Correlation - Top 8 Pairs</h2>"
         "<table><tr><th>Pair</th><th>r</th><th>Strength</th></tr>"
         + r30 +
         "</table><img src=\"" + img30 + "\" alt=\"heatmap30\"></div>\n"
-        "<div class=\"card\"><h2>90-Day Correlation - Top 6 Pairs</h2>"
+        "<div class=\"card\"><h2>90-Day Correlation - Top 8 Pairs</h2>"
         "<table><tr><th>Pair</th><th>r</th><th>Strength</th></tr>"
         + r90 +
         "</table><img src=\"" + img90 + "\" alt=\"heatmap90\"></div>\n"
